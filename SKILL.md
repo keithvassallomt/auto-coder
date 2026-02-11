@@ -1,6 +1,11 @@
 ---
 name: auto-coder
 description: A never-ending, autonomous software development loop. Manages a project from initial spec Q&A through task breakdown, execution via sub-agents, and proactive feature brainstorming. Use when a user wants to start a coding project and just have the AI 'do it'.
+license: MIT
+metadata: 
+    author: Keith Vassallo
+    version: "1.0"
+compatibility: Designed for OpenClaw agents. Requires Python, configured 'coder' agent. 
 ---
 
 # Auto Coder
@@ -12,11 +17,11 @@ This skill implements a perpetual development cycle. It ensures that projects do
 
 2. OpenClaw is running a heartbeat every 30 or so minutes. During this heartbeat, you must check the status of the backlog (see below) and continue coding, coming up with new features, or updating the user. Failing to carry out at least one of these three tasks per heartbeat is a critical failure.
 
-3. The user is communicating with you via a messagning client (Telegram, WhatsApp etc...). So don't give the user links to local files which they can't open. When starting a development server, you need to ensure it is bound to LAN ips, not localhost, otherwise the user can't see the result.
+3. The user is communicating with you via a messaging client (Telegram, WhatsApp etc...). So don't give the user links to local files which they can't open. When starting a development server, you need to ensure it is bound to LAN ips, not localhost, otherwise the user can't see the result.
 
 4. You have access to carry out web searches. 
 
-5. You have access to spawn coding agents using robust AI coding models.
+5. You have access to spawn coding agents using robust AI coding models. Ideally, the user has setup an agent in their openclaw.json file called 'coder', which specifies a coding model to use. If this is missing, inform the user and help them to create it. 
 
 On first run, you will verify the above. If anything is missing you will inform the user.
 
@@ -25,7 +30,7 @@ On first run, you will verify the above. If anything is missing you will inform 
 ### 1. User Request
 1. The user will ask for something to be created which requires coding. Since Auto Coder is not suitable for all situations, you must confirm with the user whether or not they want to use auto coder - unless their original request specifically mentions Auto Coder by name.
 
-2. Once you have confirmed that the user really does want to user Auto Coder, we go to the next step in the workflow.
+2. Once you have confirmed that the user really does want to use Auto Coder, we go to the next step in the workflow.
 
 ### 2. Discovery Mode
 1. You will ask the user what they want to create. The user will give you an overview of the project/app/utility/game/website etc... that they want to create. 
@@ -49,20 +54,22 @@ On first run, you will verify the above. If anything is missing you will inform 
 3. You will run `git init` within this folder. 
 4. **Initialize**: Run `python3 scripts/backlog_manager.py init "<project_name>"`.
 5. You will break the project spec into discrete tasks. You will then create a backlog with these tasks using `scripts/backlog_manager.py add`.
-6. You will create a `.model` file in the directory. This stores the model to be used as specified by the user.
-7. **EXTREMELY IMPORTANT**: You will add an entry in HEARTBEAT.md. You will add instructoins to check the backlog for this project as per Step 4: Execution Mode. You will also list the path of the project you have created, and the path to the skills/ folder for auto-coder. Failing to do this is considered a CRITICAL issue.
+6. You will create a `.model` file in the directory. This is a plain text file containing only the model name (e.g. `anthropic/claude-opus-4-6`).
+7. **EXTREMELY IMPORTANT**: You will add an entry in HEARTBEAT.md. You will add instructions to check the backlog for this project as per Step 4: Execution Mode. You will also list the path of the project you have created, and the path to the skills/ folder for auto-coder. Failing to do this is considered a CRITICAL issue.
 
 ### 4. Execution Mode
 The steps in this mode are to be followed in one of two situations.
 
     - Step 3 above has just been concluded, and you will now start coding. 
-    - You are returning to this skill after a hearbeat. 
+    - You are returning to this skill after a heartbeat. 
 
-1.  **Pick Task**: Run `scripts/backlog_manager.py next`.
+1.  **Pick Task**: Run `scripts/backlog_manager.py next` to get the top pending task.
 
-2.  **Spawn Sub-agent**: Use `sessions_spawn` with a high-reasoning model (specifically the one in `.model` in the project directory).
+2.  **Claim Task**: Run `scripts/backlog_manager.py start <id>` to mark it as `in-progress` and record it as the current task in state.
 
-3.  **Instruction**: Instruct the sub-agent to use the `coding-agent` skill to complete the specific task in the workspace.
+3.  **Spawn Sub-agent**: Use `sessions_spawn` with a high-reasoning model (specifically the one in `.model` in the project directory).
+
+4.  **Instruction**: Instruct the sub-agent to use the `coding-agent` skill to complete the specific task in the workspace.
 
 ### 5. Verification Mode (CRITICAL - IF YOU IGNORE THIS, YOU FAIL)
 
@@ -72,7 +79,7 @@ The steps in this mode are to be followed in one of two situations.
 
 3.  **Correction**: If verification or audit fails, fix the errors (or re-spawn) before marking the task as completed.
 
-4.  **Update State**: Mark the task as `completed` only after successful verification and a passing audit.
+4.  **Update State**: Run `scripts/backlog_manager.py complete <id>` only after successful verification and a passing audit. If verification or audit failed and the task cannot be salvaged, use `scripts/backlog_manager.py fail <id> --reason "<explanation>"`.
 
 5. **Inform the User**: Inform the user of what has been accomplished in this step, what audits were run, and the status of each audit. Also inform the user how they can check on progress (example: provide a URL, show them how to run a desktop app, etc)
 
@@ -95,22 +102,56 @@ The steps in this mode are to be followed in one of two situations.
 
 ## Heartbeat Mode (Autonomous)
 During every heartbeat, check `coding_state.json` and `coding_backlog.json`:
+
 1.  **Check Status**: If a task was recently finished, check for any leftover error logs.
 
 2.  **Resume**: If tasks remain `pending`, spawn the next one and follow the Execution Mode steps (including Verification).
 
-3.  **Autonomous Audit**: If all tasks are `completed`, and the project has a web frontend, you MUST run a browser-based analysis (e.g., via sub-agent with browser access):
-    - Verify the UI is functional, responsive, and free of console errors.
-    - Identify UX friction or visual inconsistencies.
-    - If issues are found, automatically `add` them to the backlog and resume **Execution Mode**.
+3. **Quality Assurance**: If all tasks are `completed`, run through the following phases in order:
 
-4.  **Brainstorm**: If all tasks are `completed` AND the Autonomous Audit passes, generate 3 "Next Evolution" feature proposals. Present them to the user in the next interaction.
+### Phase A — Production Audit (MANDATORY)
+    - Run build/lint/tests.
+    - If any failure → create backlog tasks and resume execution.
+
+### Phase B — Runtime Audit (MANDATORY)
+If the project has a web UI:
+
+    - Launch dev server (if not running).
+    
+    - Run browser-based analysis (Playwright-style):
+        - Check console errors
+        - Verify key navigation flows
+        - Check data rendering
+        - Detect stale UI semantics
+        - Validate websocket features
+    
+    - If ANY issues detected:
+        - Do not attempt immediate fixes. Instead: Automatically add structured backlog tasks.
+        - Resume Execution Mode immediately within the same heartbeat.
+        - DO NOT brainstorm.
+
+### Phase C — Evolution Mode
+Only if Phase A and B pass clean:
+
+    - Generate 3 Next Evolution proposals (new features, UX improvements, or architectural enhancements).
+    - Present the proposals to the user for approval.
+    - Add any user-approved proposals to the backlog and resume Execution Mode.
 
 ## Backlog Management
 Use the provided script to maintain consistency:
+- `python3 scripts/backlog_manager.py init "<project_name>"`: Initialize backlog and state files.
 - `python3 scripts/backlog_manager.py summary`: Get current stats.
+- `python3 scripts/backlog_manager.py list [--status pending|in-progress|completed|failed]`: List all tasks, optionally filtered by status.
 - `python3 scripts/backlog_manager.py next`: Get the top pending task.
-- `python3 scripts/backlog_manager.py add "<Title>" --desc "<Detailed Spec>"`: Add a task.
+- `python3 scripts/backlog_manager.py add "<Title>" --desc "<Detailed Spec>" [--priority high|medium|low]`: Add a task.
+- `python3 scripts/backlog_manager.py start <id>`: Mark a task as `in-progress` and set it as the current task in state.
+- `python3 scripts/backlog_manager.py complete <id>`: Mark a task as `completed` and record the completion timestamp.
+- `python3 scripts/backlog_manager.py fail <id> --reason "<explanation>"`: Mark a task as `failed` with a reason.
+- `python3 scripts/backlog_manager.py reopen <id>`: Move a `completed` or `failed` task back to `pending`.
+- `python3 scripts/backlog_manager.py log <id> --msg "<note>"`: Append a timestamped note (e.g. audit result) to a task.
+- `python3 scripts/backlog_manager.py update <id> <status>`: Directly set a task's status (prefer `start`/`complete`/`fail` instead).
+
+All commands accept an optional `--project-dir <path>` flag to specify the project root (defaults to current directory).
 
 ## Constraints
 - Always maintain `coding_backlog.json` and `coding_state.json` in the project root.

@@ -53,9 +53,11 @@ On first run, you will verify the above. If anything is missing you will inform 
 2. You will create a folder for this project in your workspace. 
 3. You will run `git init` within this folder. 
 4. **Initialize**: Run `python3 scripts/backlog_manager.py init "<project_name>"`.
-5. You will break the project spec into discrete tasks. You will then create a backlog with these tasks using `scripts/backlog_manager.py add`.
-6. You will create a `.model` file in the directory. This is a plain text file containing only the model name (e.g. `anthropic/claude-opus-4-6`).
-7. **EXTREMELY IMPORTANT**: You will add an entry in HEARTBEAT.md. You will add instructions to check the backlog for this project as per Step 4: Execution Mode. You will also list the path of the project you have created, and the path to the skills/ folder for auto-coder. Failing to do this is considered a CRITICAL issue.
+5. **Domain Contract (MANDATORY)**: Create a `CONTRACT.md` in the project root. This file must define the **Semantic Assertions** and **Product Rules** for the project. These are non-negotiable truths the software must uphold (e.g., "Guest users must never see Admin buttons" or "QEMU VMs must appear in the VMs tab, not Containers"). No task can be added to the backlog without its corresponding semantic rule being recorded here.
+6. **Intent Recording**: For every task added to the backlog, you must record the **Intended User Experience** in plain English. This acts as the behavioral reference for the auditor.
+7. You will break the project spec into discrete tasks. You will then create a backlog with these tasks using `scripts/backlog_manager.py add`.
+8. You will create a `.model` file in the directory. This is a plain text file containing only the model name (e.g. `anthropic/claude-opus-4-6`).
+9. **EXTREMELY IMPORTANT**: You will add an entry in HEARTBEAT.md. You will add instructions to check the backlog for this project as per Step 4: Execution Mode. You will also list the path of the project you have created, and the path to the skills/ folder for auto-coder. Failing to do this is considered a CRITICAL issue.
 
 ### 4. Execution Mode
 The steps in this mode are to be followed in one of two situations.
@@ -75,9 +77,13 @@ The steps in this mode are to be followed in one of two situations.
 
 1.  **Verification (CRITICAL)**: After the sub-agent finishes, you MUST run a verification step (e.g., `npm run lint`, `npm run build`, `pytest`, or `ruff check`) to catch errors and maintain code quality. Run as many checks as possible to ensure high code quality. Spawn sub-agents to fix the issues. 
 
-2.  **Audit (MANDATORY)**: Spawn a separate sub-agent (using `.model`) to specifically audit the task completion. It must verify that the feature is not just coded, but integrated and functional. Inform the user of this audit result. You will also verify that the task the agent said it completed has actually been implemented. If not, re-spawn an agent with the current task.
+2.  **Audit (MANDATORY)**: Spawn a separate sub-agent (using `.model`) to specifically audit the task completion. 
+    - **Contract Validation**: The auditor MUST read `CONTRACT.md` and verify that the implementation does not violate any semantic assertions. 
+    - **Behavioral Check**: The auditor must verify that the feature is not just coded, but integrated and functional.
+    - **Expectation Check**: If API credentials or configurations are provided, the auditor must verify that the resulting data is present and non-empty (if applicable).
+    - Inform the user of this audit result. You will also verify that the task the agent said it completed has actually been implemented. If not, re-spawn an agent with the current task.
 
-3.  **Correction**: If verification or audit fails, fix the errors (or re-spawn) before marking the task as completed.
+3.  **Correction**: If verification or audit fails (including Contract violations), fix the errors (or re-spawn) before marking the task as completed.
 
 4.  **Update State**: Run `scripts/backlog_manager.py complete <id>` only after successful verification and a passing audit. If verification or audit failed and the task cannot be salvaged, use `scripts/backlog_manager.py fail <id> --reason "<explanation>"`.
 
@@ -101,13 +107,19 @@ The steps in this mode are to be followed in one of two situations.
 - **INFORM**: Every heartbeat must result in the user receiving some sort of status update. If you have not communicated with the user each heartbeat, you have failed. If your last message to the user was over 30 minutes ago, you have failed.
 
 ## Heartbeat Mode (Autonomous)
-During every heartbeat, check `coding_state.json` and `coding_backlog.json`:
+During every heartbeat, you MUST first anchor yourself to the correct project root before reading any backlog state.
 
-1.  **Check Status**: If a task was recently finished, check for any leftover error logs.
+1. **Pin Project Directory (MANDATORY)**:
+   - Read HEARTBEAT.md and identify the absolute path of the project (e.g. `/Users/.../workspace/pulse`).
+   - Explicitly `cd` into that directory before running ANY `backlog_manager.py` command.
+   - Never assume the current working directory is correct.
+   - If the project path cannot be determined, FAIL the heartbeat and report to the user.
 
-2.  **Resume**: If tasks remain `pending`, spawn the next one and follow the Execution Mode steps (including Verification).
+2.  **Check Status**: Once inside the correct project directory, check `coding_state.json` and `coding_backlog.json`.
 
-3. **Quality Assurance**: If all tasks are `completed`, run through the following phases in order:
+3.  **Resume**: If tasks remain `pending`, spawn the next one and follow the Execution Mode steps (including Verification).
+
+4. **Quality Assurance**: If all tasks are `completed`, run through the following phases in order:
 
 ### Phase A — Production Audit (MANDATORY)
     - Run build/lint/tests.

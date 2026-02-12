@@ -2,170 +2,198 @@
 name: auto-coder
 description: A never-ending, autonomous software development loop. Manages a project from initial spec Q&A through task breakdown, execution via sub-agents, and proactive feature brainstorming. Use when a user wants to start a coding project and just have the AI 'do it'.
 license: MIT
-metadata: 
-    author: Keith Vassallo
-    version: "1.0"
-compatibility: Designed for OpenClaw agents. Requires Python, configured 'coder' agent. 
+metadata:
+  author: Keith Vassallo
+  version: "1.0"
+compatibility: Designed for OpenClaw agents. Requires Python, configured 'coder' agent.
 ---
 
 # Auto Coder
 
 This skill implements a perpetual development cycle. It ensures that projects don't stall by integrating with the OpenClaw heartbeat system.
 
+---
+
 ## Assumptions
-1. You are working within OpenClaw. You have access to system tools. 
 
-2. OpenClaw is running a heartbeat every 30 or so minutes. During this heartbeat, you must check the status of the backlog (see below) and continue coding, coming up with new features, or updating the user. Failing to carry out at least one of these three tasks per heartbeat is a critical failure.
+1. You are working within OpenClaw. You have access to OpenClaw system tools including file I/O, shell execution, web search, messaging, and the `sessions_spawn` API for spawning sub-agents.
+2. OpenClaw is running a heartbeat every ~30 minutes. During this heartbeat, you must check the status of the backlog (see below) and continue coding, coming up with new features, or updating the user. Failing to carry out at least one of these three tasks per heartbeat is a critical failure.
+3. The user is communicating with you via a messaging client (Telegram, WhatsApp, etc.). Do not give the user links to local files they can't open. When starting a development server, ensure it is bound to LAN IPs, not `localhost`, otherwise the user can't see the result.
+4. You have access to spawn coding agents using robust AI coding models. Ideally, the user has set up an agent in their `openclaw.json` file called `coder`, which specifies a coding model to use. If this is missing, inform the user and help them create it.
 
-3. The user is communicating with you via a messaging client (Telegram, WhatsApp etc...). So don't give the user links to local files which they can't open. When starting a development server, you need to ensure it is bound to LAN ips, not localhost, otherwise the user can't see the result.
+> **On first run**, verify all of the above. If anything is missing, inform the user.
 
-4. You have access to carry out web searches. 
-
-5. You have access to spawn coding agents using robust AI coding models. Ideally, the user has setup an agent in their openclaw.json file called 'coder', which specifies a coding model to use. If this is missing, inform the user and help them to create it. 
-
-On first run, you will verify the above. If anything is missing you will inform the user.
+---
 
 ## Workflow
 
-### 1. User Request
-1. The user will ask for something to be created which requires coding. Since Auto Coder is not suitable for all situations, you must confirm with the user whether or not they want to use auto coder - unless their original request specifically mentions Auto Coder by name.
+### Step 1 — User Request
 
-2. Once you have confirmed that the user really does want to use Auto Coder, we go to the next step in the workflow.
+1. The user will ask for something to be created which requires coding. Since Auto Coder is not suitable for all situations, you must confirm with the user whether or not they want to use Auto Coder — unless their original request specifically mentions Auto Coder by name.
+2. Once confirmed, proceed to Discovery Mode.
 
-### 2. Discovery Mode
-1. You will ask the user what they want to create. The user will give you an overview of the project/app/utility/game/website etc... that they want to create. 
+### Step 2 — Discovery Mode
 
-2. **Grill the User**: Do not accept the spec immediately. Ask 3-5 sharp, technical questions about edge cases, stack preferences, or data structures. You MUST ask the user ALL of the following questions:
+1. **Expand the Request** — Ask the user to elaborate on their initial request with more detail. Clarify the scope, target audience, and core functionality of the project they want to build.
 
-    - Tech stacks to be used. 
-    - Desired front-end (web, desktop, mobile)
-    - Any specific technologies to use (Java, Python, FastCGI, TailWind, Ruby, React, Angular, Svelte, SQLite and so on). Ensure you have a technology stack for both frontend and backend.
+2. **Grill the User** — Do not accept the spec at face value. Ask 3–5 sharp, technical questions to fill in gaps. You MUST cover ALL of the following areas:
+   - **Tech Stack** — Which languages, frameworks, and tools to use for both frontend and backend (e.g., Java, Python, React, Svelte, FastAPI, SQLite).
+   - **Platform** — Desired front-end platform (web, desktop, mobile) and deployment target.
+   - **Data Model** — What are the core entities and their relationships? What data needs to be stored, and how should it be structured?
+   - **Edge Cases** — What happens on invalid input, network failure, empty states, or concurrent access? Identify at least 2 edge cases relevant to the project.
+   - **Auth & Access** — Does the project need authentication or authorization? If so, what kind (e.g., session-based, JWT, OAuth)?
 
-3. **Tech Research**: Proactively search for the latest stable versions of libraries and frameworks mentioned in the spec (e.g., Vite, Tailwind, FastAPI). Ensure the project uses modern, non-deprecated patterns. **IMPORTANT**: Unless the user tells you to use a specific version of a framework, technology, or library, you MUST:
+   Additionally, ask any other project-specific questions that would prevent ambiguity during implementation.
 
-    - Run a web search to discover the latest version of a technology, library, framework being used. 
-    - Ensure that version number is remembered and that it will be used in the final project. 
+3. **Tech Research** — Proactively search for the latest stable versions of libraries and frameworks mentioned in the spec (e.g., Vite, Tailwind, FastAPI). Ensure the project uses modern, non-deprecated patterns. Unless the user specifies a version, you MUST:
+   - Run a web search to discover the latest stable version of each technology, library, or framework being used.
+   - Record the version number and ensure it will be used in the final project.
 
-4. **Coding Agent**: Ask the user which coding agent they want to use. They should reply with a provider/agent, such as "anthropic/claude-opus-4-6". 
+### Step 3 — Planning Mode
 
-### 3. Planning Mode
-1. Following the discovery, you will write a final spec for this project in memory. 
-2. You will create a folder for this project in your workspace. 
-3. You will run `git init` within this folder. 
-4. **Initialize**: Run `python3 scripts/backlog_manager.py init "<project_name>"`.
-5. **Domain Contract (MANDATORY)**: Create a `CONTRACT.md` in the project root. This file must define the **Semantic Assertions** and **Product Rules** for the project. These are non-negotiable truths the software must uphold (e.g., "Guest users must never see Admin buttons" or "QEMU VMs must appear in the VMs tab, not Containers"). No task can be added to the backlog without its corresponding semantic rule being recorded here.
-6. **Intent Recording**: For every task added to the backlog, you must record the **Intended User Experience** in plain English. This acts as the behavioral reference for the auditor.
-7. You will break the project spec into discrete tasks. You will then create a backlog with these tasks using `scripts/backlog_manager.py add`.
-8. You will create a `.model` file in the directory. This is a plain text file containing only the model name (e.g. `anthropic/claude-opus-4-6`).
-9. **EXTREMELY IMPORTANT**: You will add an entry in HEARTBEAT.md. You will add instructions to check the backlog for this project as per Step 4: Execution Mode. You will also list the path of the project you have created, and the path to the skills/ folder for auto-coder. Failing to do this is considered a CRITICAL issue.
+1. **Create Project Folder** — Create a folder for this project in the OpenClaw workspace.
+2. **Init Git** — Run `git init` within this folder.
+3. **Init Backlog** — Run `python3 scripts/backlog_manager.py init "<project_name>"`.
+4. **Write Spec** — Write a `SPEC.md` file in the project root containing the finalized project specification from Discovery Mode. This is the single source of truth for what is being built.
+5. **Domain Contract** *(mandatory)* — Create a `CONTRACT.md` in the project root. This file must define the **Semantic Assertions** and **Product Rules** for the project — non-negotiable truths the software must uphold. Examples:
+   - *"Users must be logged in to access /dashboard"*
+   - *"Guest users must never see Admin buttons"*
+   - *"All API responses must include appropriate error codes"*
 
-### 4. Execution Mode
-The steps in this mode are to be followed in one of two situations.
+   No task can be added to the backlog without its corresponding semantic rule being recorded here.
+6. **Intent Recording** — For every task added to the backlog, record the **Intended User Experience** in plain English. This acts as the behavioral reference for the auditor.
+7. **Create Backlog** — Break the project spec into discrete tasks. Create the backlog using `scripts/backlog_manager.py add`.
+8. **Select Coding Agent** — Ask the user which coding agent they want to use. They should reply with a provider/model, such as `anthropic/claude-opus-4-6`. Create a `.model` file in the project root containing only this model identifier.
+9. **Install Dependencies** — Install the project's dependencies based on the chosen tech stack (e.g., `npm install`, `pip install -r requirements.txt`, `cargo build`). Ensure the project compiles/resolves cleanly before any tasks begin.
+10. **Register Heartbeat** *(mandatory)* — Add an entry in `HEARTBEAT.md` in the OpenClaw workspace. Include:
+    - Instructions to check the backlog for this project (per Step 4).
+    - The absolute path of the project.
+    - The path to the `skills/` folder for auto-coder.
 
-    - Step 3 above has just been concluded, and you will now start coding. 
-    - You are returning to this skill after a heartbeat. 
+    Failing to do this means the heartbeat system will not pick up this project.
 
-1.  **Pick Task**: Run `scripts/backlog_manager.py next` to get the top pending task.
+### Step 4 — Execution Mode
 
-2.  **Claim Task**: Run `scripts/backlog_manager.py start <id>` to mark it as `in-progress` and record it as the current task in state.
+This mode applies in two situations:
 
-3.  **Spawn Sub-agent**: Use `sessions_spawn` with a high-reasoning model (specifically the one in `.model` in the project directory).
+- Planning Mode (Step 3) has just been concluded, and you will now start coding.
+- You are returning to this skill after a heartbeat.
 
-4.  **Instruction**: Instruct the sub-agent to use the `coding-agent` skill to complete the specific task in the workspace.
+**Steps:**
 
-### 5. Verification Mode (CRITICAL - IF YOU IGNORE THIS, YOU FAIL)
+1. **Pick Task** — Run `scripts/backlog_manager.py next` to get the top pending task.
+2. **Claim Task** — Run `scripts/backlog_manager.py start <id>` to mark it as `in-progress` and record it as the current task in state.
+3. **Spawn Sub-agent** — Use the OpenClaw `sessions_spawn` API to create a sub-agent using the model specified in the `.model` file in the project root.
+4. **Instruct** — Tell the sub-agent to use the built-in `coding-agent` skill to complete the specific task in the project directory.
 
-1.  **Verification (CRITICAL)**: After the sub-agent finishes, you MUST run a verification step (e.g., `npm run lint`, `npm run build`, `pytest`, or `ruff check`) to catch errors and maintain code quality. Run as many checks as possible to ensure high code quality. Spawn sub-agents to fix the issues. 
+### Step 5 — Verification Mode *(mandatory)*
 
-2.  **Audit (MANDATORY)**: Spawn a separate sub-agent (using `.model`) to specifically audit the task completion. 
-    - **Contract Validation**: The auditor MUST read `CONTRACT.md` and verify that the implementation does not violate any semantic assertions. 
-    - **Behavioral Check**: The auditor must verify that the feature is not just coded, but integrated and functional.
-    - **Expectation Check**: If API credentials or configurations are provided, the auditor must verify that the resulting data is present and non-empty (if applicable).
-    - Inform the user of this audit result. You will also verify that the task the agent said it completed has actually been implemented. If not, re-spawn an agent with the current task.
+1. **Verify** — After the sub-agent finishes, run a verification step (e.g., `npm run lint`, `npm run build`, `pytest`, or `ruff check`) to catch errors and maintain code quality. Run as many checks as possible.
 
-3.  **Correction**: If verification or audit fails (including Contract violations), fix the errors (or re-spawn) before marking the task as completed.
+2. **Audit** — Spawn a separate sub-agent (using `.model`) to audit the task completion:
+   - **Contract Validation** — The auditor MUST read `CONTRACT.md` and verify that the implementation does not violate any semantic assertions.
+   - **Behavioral Check** — The auditor must verify that the feature is not just coded, but integrated and functional.
+   - **Expectation Check** — If API credentials or configurations are provided, the auditor must verify that the resulting data is present and non-empty (if applicable).
+   - Inform the user of the audit result. Also verify that the task the agent claimed to complete has actually been implemented. If not, re-spawn an agent with the current task.
 
-4.  **Update State**: Run `scripts/backlog_manager.py complete <id>` only after successful verification and a passing audit. If verification or audit failed and the task cannot be salvaged, use `scripts/backlog_manager.py fail <id> --reason "<explanation>"`.
+3. **Correction** *(max 3 retries)* — If verification or audit fails (including Contract violations), re-spawn a sub-agent with the failure details to fix the errors. You may retry up to **3 times** per task. If the task still fails after 3 attempts, mark it as failed and pause — notify the user with the failure details and ask how to proceed.
 
-5. **Inform the User**: Inform the user of what has been accomplished in this step, what audits were run, and the status of each audit. Also inform the user how they can check on progress (example: provide a URL, show them how to run a desktop app, etc)
+4. **Git Commit** — After successful verification and audit, commit the changes with a descriptive message referencing the task ID and title (e.g., `git commit -m "Task #4: Implement user login form"`).
 
-## Execution Protocol (CRITICAL - DO NOT IGNORE)
-- **NO ASKING FOR PERMISSION**: If there are tasks in the backlog, EXECUTE THEM. Do not end a turn by asking "Should I start?" or "Ready to proceed?".
+5. **Update State** — Run `scripts/backlog_manager.py complete <id>` only after successful verification, a passing audit, and a committed change. If the task exhausted all retries, use `scripts/backlog_manager.py fail <id> --reason "<explanation>"`.
 
-- **PROACTIVE CONTINUATION**: After a task passes audit, immediately pick up the next task.
+6. **Inform the User** — Tell the user what was accomplished, which audits were run, and the status of each. Also inform them how they can check on progress (e.g., provide a URL, show them how to run a desktop app, etc.).
 
-- **ZERO THEATRICS**: Skip the "I am starting now" or "I am your engineer" fluff. Just provide the status of the current run or the results of the audit.
+---
 
-- **AUDIT IS LAW**: If a task fails audit, it is NOT complete. Immediately re-spawn the sub-agent with the audit findings and fix it. Never report a failed task as "done".
+## Execution Protocol *(mandatory)*
 
-## User Communication (IGNORE THIS IF YOU WANT TO FAIL MISERABLY)
+- **No Asking for Permission** — If there are tasks in the backlog, execute them. Do not end a turn by asking "Should I start?" or "Ready to proceed?".
+- **Proactive Continuation** — After a task passes audit, immediately pick up the next task.
+- **Zero Theatrics** — Skip the "I am starting now" or "I am your engineer" fluff. Just provide the status of the current run or the results of the audit.
+- **Audit Is Law** — If a task fails audit, it is NOT complete. Re-spawn the sub-agent with the audit findings and fix it (up to the 3-retry limit defined in Verification Mode). Never report a failed task as "done".
 
-- **DO NOT SPAM THE USER**: If you have many things to tell the user, don't create 10 messages and send them to the user all at one go. Prepare one coherent longer message, and send it.
+---
 
-- **DEBOUNCE**: You are not allowed to send more than two messages a minute to the user, unless the user specifically asks a question or wants your input. 
+## User Communication *(mandatory)*
 
-- **INFORM**: Every heartbeat must result in the user receiving some sort of status update. If you have not communicated with the user each heartbeat, you have failed. If your last message to the user was over 30 minutes ago, you have failed.
+- **Do Not Spam** — If you have many things to tell the user, prepare one coherent message and send it. Do not send 10 messages in rapid succession.
+- **Debounce** — You are not allowed to send more than two messages per minute, unless the user specifically asks a question or wants your input.
+- **Status Updates** — Every heartbeat must include a status update to the user about ongoing projects. If more than 30 minutes have passed since your last message, send a status update even if there is nothing new — a brief "still working on Task #N, no blockers" is sufficient.
+
+---
 
 ## Heartbeat Mode (Autonomous)
+
 During every heartbeat, you MUST first anchor yourself to the correct project root before reading any backlog state.
 
-1. **Pin Project Directory (MANDATORY)**:
-   - Read HEARTBEAT.md and identify the absolute path of the project (e.g. `/Users/.../workspace/pulse`).
+1. **Pin Project Directory** *(mandatory)* —
+   - Read `HEARTBEAT.md` and identify the absolute path of the project (e.g., `/Users/.../workspace/PROJECT_NAME`).
    - Explicitly `cd` into that directory before running ANY `backlog_manager.py` command.
    - Never assume the current working directory is correct.
-   - If the project path cannot be determined, FAIL the heartbeat and report to the user.
+   - If the project path cannot be determined, fail the heartbeat and report to the user.
 
-2.  **Check Status**: Once inside the correct project directory, check `coding_state.json` and `coding_backlog.json`.
+2. **Check Status** — Once inside the correct project directory, check `coding_state.json` and `coding_backlog.json`.
 
-3.  **Resume**: If tasks remain `pending`, spawn the next one and follow the Execution Mode steps (including Verification).
+3. **Resume** — If tasks remain `pending`, spawn the next one and follow Execution Mode (including Verification).
 
-4. **Quality Assurance**: If all tasks are `completed`, run through the following phases in order:
+4. **Quality Assurance** — If all tasks are `completed`, run through the following phases in order:
 
-### Phase A — Production Audit (MANDATORY)
-    - Run build/lint/tests.
-    - If any failure → create backlog tasks and resume execution.
+#### Phase A — Production Audit
 
-### Phase B — Runtime Audit (MANDATORY)
-If the project has a web UI:
+- Run build, lint, and tests.
+- If any failure is found, create backlog tasks and resume Execution Mode.
 
-    - Launch dev server (if not running).
-    
-    - Run browser-based analysis (Playwright-style):
-        - Check console errors
-        - Verify key navigation flows
-        - Check data rendering
-        - Detect stale UI semantics
-        - Validate websocket features
-    
-    - If ANY issues detected:
-        - Do not attempt immediate fixes. Instead: Automatically add structured backlog tasks.
-        - Resume Execution Mode immediately within the same heartbeat.
-        - DO NOT brainstorm.
+#### Phase B — Runtime Validation *(mandatory)*
 
-### Phase C — Evolution Mode
+Run runtime checks appropriate to the project type:
+
+| Project Type | Checks |
+|---|---|
+| **Web UI** | Launch dev server (if not running). Run browser-based analysis (Playwright-style): check console errors, verify key navigation flows, check data rendering, detect stale UI semantics, validate websocket features. |
+| **API / Backend** | Start the server and run smoke tests against key endpoints. Verify response codes, payload structure, and error handling. |
+| **CLI / Desktop** | Execute the main entry point with representative inputs. Verify expected output, exit codes, and error messages. |
+| **Other** | Identify the most meaningful runtime check and execute it. If unsure, ask the user. |
+
+If ANY issues are detected:
+
+- Do not attempt immediate fixes. Instead, automatically add structured backlog tasks.
+- Resume Execution Mode immediately within the same heartbeat.
+- Do NOT brainstorm.
+
+#### Phase C — Evolution Mode
+
 Only if Phase A and B pass clean:
 
-    - Generate 3 Next Evolution proposals (new features, UX improvements, or architectural enhancements).
-    - Present the proposals to the user for approval.
-    - Add any user-approved proposals to the backlog and resume Execution Mode.
+1. **Ensure Visibility** — Before presenting proposals, make sure any network-accessible artefacts are running and reachable. Start (or verify) dev servers, API servers, or any other services the user can access over the network. Provide the user with LAN-accessible URLs so they can see the current state of the project for themselves. This does not apply to artefacts that are not network-accessible (e.g., CLI tools, desktop apps).
+2. **Propose** — Generate 3 "Next Evolution" proposals (new features, UX improvements, or architectural enhancements).
+3. **Present** — Present the proposals to the user along with the URLs where they can see the project live.
+4. **Execute** — Add any user-approved proposals to the backlog and resume Execution Mode.
+
+---
 
 ## Backlog Management
-Use the provided script to maintain consistency:
-- `python3 scripts/backlog_manager.py init "<project_name>"`: Initialize backlog and state files.
-- `python3 scripts/backlog_manager.py summary`: Get current stats.
-- `python3 scripts/backlog_manager.py list [--status pending|in-progress|completed|failed]`: List all tasks, optionally filtered by status.
-- `python3 scripts/backlog_manager.py next`: Get the top pending task.
-- `python3 scripts/backlog_manager.py add "<Title>" --desc "<Detailed Spec>" [--priority high|medium|low]`: Add a task.
-- `python3 scripts/backlog_manager.py start <id>`: Mark a task as `in-progress` and set it as the current task in state.
-- `python3 scripts/backlog_manager.py complete <id>`: Mark a task as `completed` and record the completion timestamp.
-- `python3 scripts/backlog_manager.py fail <id> --reason "<explanation>"`: Mark a task as `failed` with a reason.
-- `python3 scripts/backlog_manager.py reopen <id>`: Move a `completed` or `failed` task back to `pending`.
-- `python3 scripts/backlog_manager.py log <id> --msg "<note>"`: Append a timestamped note (e.g. audit result) to a task.
-- `python3 scripts/backlog_manager.py update <id> <status>`: Directly set a task's status (prefer `start`/`complete`/`fail` instead).
 
-All commands accept an optional `--project-dir <path>` flag to specify the project root (defaults to current directory).
+Use the provided script to maintain consistency. All commands accept an optional `--project-dir <path>` flag to specify the project root (defaults to current directory).
+
+| Command | Description |
+|---|---|
+| `python3 scripts/backlog_manager.py init "<project_name>"` | Initialize backlog and state files. |
+| `python3 scripts/backlog_manager.py summary` | Get current stats. |
+| `python3 scripts/backlog_manager.py list [--status <status>]` | List all tasks, optionally filtered by status (`pending`, `in-progress`, `completed`, `failed`). |
+| `python3 scripts/backlog_manager.py next` | Get the top pending task. |
+| `python3 scripts/backlog_manager.py add "<Title>" --desc "<Spec>" [--priority <level>]` | Add a task. Priority: `high`, `medium`, or `low`. |
+| `python3 scripts/backlog_manager.py start <id>` | Mark a task as `in-progress` and set it as the current task in state. |
+| `python3 scripts/backlog_manager.py complete <id>` | Mark a task as `completed` and record the completion timestamp. |
+| `python3 scripts/backlog_manager.py fail <id> --reason "<explanation>"` | Mark a task as `failed` with a reason. |
+| `python3 scripts/backlog_manager.py reopen <id>` | Move a `completed` or `failed` task back to `pending`. |
+| `python3 scripts/backlog_manager.py log <id> --msg "<note>"` | Append a timestamped note (e.g., audit result) to a task. |
+| `python3 scripts/backlog_manager.py update <id> <status>` | Directly set a task's status. Prefer `start`/`complete`/`fail` instead. |
+
+---
 
 ## Constraints
+
 - Always maintain `coding_backlog.json` and `coding_state.json` in the project root.
 - Never delete the backlog without explicit user confirmation.
-- If a sub-agent fails, pause and report the error to the user immediately.
+- If a sub-agent fails, retry up to 3 times (see Verification Mode). After exhausting retries, pause and report the error to the user with full context before continuing.

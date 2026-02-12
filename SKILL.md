@@ -118,8 +118,8 @@ This mode applies in two situations:
 ## User Communication *(mandatory)*
 
 - **Do Not Spam** — If you have many things to tell the user, prepare one coherent message and send it. Do not send 10 messages in rapid succession.
-- **Debounce** — You are not allowed to send more than two messages per minute, unless the user specifically asks a question or wants your input.
-- **Status Updates** — Every heartbeat must include a status update to the user about ongoing projects. If more than 30 minutes have passed since your last message, send a status update even if there is nothing new — a brief "still working on Task #N, no blockers" is sufficient.
+- **Debounce** — You are not allowed to send more than two messages per minute about each ongoing project, unless the user specifically asks a question or wants your input. NOTE: this only applies to tasks directly related to this skill (auto-coder); other messages are of course allowed. 
+- **Status Updates** — Every heartbeat must include a status update to the user about ongoing projects. If more than 30 minutes have passed since your last message, send a status update even if there is nothing new — a brief "still working on Task #N, no blockers" is sufficient. Note: this only applies to items in the heartbeat related to ongoing coding projects. You do not also need to update the user on other items in the heartbeat file.
 
 ---
 

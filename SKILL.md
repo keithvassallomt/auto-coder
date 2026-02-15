@@ -63,7 +63,7 @@ This skill implements a perpetual development cycle. It ensures that projects do
    No task can be added to the backlog without its corresponding semantic rule being recorded here.
 6. **Intent Recording** — For every task added to the backlog, record the **Intended User Experience** in plain English. This acts as the behavioral reference for the auditor.
 7. **Create Backlog** — Break the project spec into discrete tasks. Create the backlog using `scripts/backlog_manager.py add`.
-8. **Select Coding Agent** — Ask the user which coding agent they want to use. They should reply with a provider/model, such as `anthropic/claude-opus-4-6`. Create a `.model` file in the project root containing only this model identifier.
+8. **Coding Agent Setup** — Ensure an agent called `coder` is configured in `openclaw.json` with appropriate models and fallbacks. If it is missing, inform the user and help them create it. The `auto-coder` skill will target this agent for all execution and audit tasks.
 9. **Install Dependencies** — Install the project's dependencies based on the chosen tech stack (e.g., `npm install`, `pip install -r requirements.txt`, `cargo build`). Ensure the project compiles/resolves cleanly before any tasks begin.
 10. **Register Heartbeat** *(mandatory)* — Add an entry in `HEARTBEAT.md` in the OpenClaw workspace. Include:
     - Instructions to check the backlog for this project (per Step 4).
@@ -83,14 +83,14 @@ This mode applies in two situations:
 
 1. **Pick Task** — Run `scripts/backlog_manager.py next` to get the top pending task.
 2. **Claim Task** — Run `scripts/backlog_manager.py start <id>` to mark it as `in-progress` and record it as the current task in state.
-3. **Spawn Sub-agent** — Use the OpenClaw `sessions_spawn` API to create a sub-agent using the model specified in the `.model` file in the project root.
+3. **Spawn Sub-agent** — Use the OpenClaw `sessions_spawn` API to create a sub-agent targeting the `coder` agent.
 4. **Instruct** — Tell the sub-agent to use the built-in `coding-agent` skill to complete the specific task in the project directory.
 
 ### Step 5 — Verification Mode *(mandatory)*
 
 1. **Verify** — After the sub-agent finishes, run a verification step (e.g., `npm run lint`, `npm run build`, `pytest`, or `ruff check`) to catch errors and maintain code quality. Run as many checks as possible.
 
-2. **Audit** — Spawn a separate sub-agent (using `.model`) to audit the task completion:
+2. **Audit** — Spawn a separate sub-agent targeting the `coder` agent to audit the task completion:
    - **Contract Validation** — The auditor MUST read `CONTRACT.md` and verify that the implementation does not violate any semantic assertions.
    - **Behavioral Check** — The auditor must verify that the feature is not just coded, but integrated and functional.
    - **Expectation Check** — If API credentials or configurations are provided, the auditor must verify that the resulting data is present and non-empty (if applicable).
